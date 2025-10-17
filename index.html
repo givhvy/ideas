@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Ideas - Quản Lý Ý Tưởng</title>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+    <!-- CryptoJS for AES-256 Encryption -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>💡 My Ideas</h1>
+                    <p class="subtitle">Lưu trữ và quản lý mọi ý tưởng của bạn</p>
+                </div>
+                <button class="logout-btn" onclick="logout()">Đăng xuất</button>
+            </div>
+        </header>
+
+        <div class="add-idea-section">
+            <div class="input-group">
+                <input type="text" id="ideaTitle" placeholder="Ý tưởng..." maxlength="200">
+                <div class="button-group">
+                    <button id="addBtn" class="btn btn-primary">
+                        <span class="btn-icon">+</span>
+                        Thêm
+                    </button>
+                    <button id="cancelBtn" class="btn btn-secondary" style="display: none;">Hủy</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="filter-section">
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="🔍 Tìm kiếm ý tưởng...">
+            </div>
+        </div>
+
+        <div class="stats-section">
+            <div class="stat-card">
+                <div class="stat-number" id="totalIdeas">0</div>
+                <div class="stat-label">Tổng ý tưởng</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="todayIdeas">0</div>
+                <div class="stat-label">Hôm nay</div>
+            </div>
+        </div>
+
+        <div class="ideas-grid" id="ideasGrid">
+            <!-- Ideas will be dynamically inserted here -->
+        </div>
+
+        <div class="empty-state" id="emptyState">
+            <div class="empty-icon">💭</div>
+            <h3>Chưa có ý tưởng nào</h3>
+            <p>Hãy bắt đầu thêm ý tưởng đầu tiên của bạn!</p>
+        </div>
+
+        <!-- Firebase Sync Section -->
+        <div class="sync-section">
+            <div class="sync-header">
+                <h3>🔐 Firebase Cloud Sync (Mã hóa AES-256)</h3>
+                <button id="openFirebaseConfig" class="btn btn-secondary">⚙️ Cấu hình</button>
+            </div>
+            <div class="sync-status" id="syncStatus">
+                <span style="color: #94a3b8;">❌ Chưa cấu hình Firebase</span>
+            </div>
+            <div class="sync-controls">
+                <button id="syncNowBtn" class="btn btn-primary sync-btn" disabled>☁️ Đồng bộ lên Cloud</button>
+                <button id="loadFromFirebaseBtn" class="btn btn-secondary sync-btn" disabled>⬇️ Tải từ Cloud</button>
+                <button id="toggleRealtimeSync" class="btn btn-secondary sync-btn" disabled>🔄 Bật Sync Realtime</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for viewing/editing idea -->
+    <div class="modal" id="ideaModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Chỉnh sửa ý tưởng</h2>
+                <button class="close-btn" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <input type="text" id="editTitle" class="modal-input" placeholder="Ý tưởng...">
+                <div class="modal-meta">
+                    <small id="modalDate"></small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" id="deleteBtn">Xóa</button>
+                <button class="btn btn-primary" id="saveBtn">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Configuration Modal -->
+    <div class="modal" id="firebaseConfigModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>⚙️ Cấu hình Firebase</h2>
+                <button class="close-btn" id="closeConfigModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="config-info">
+                    <p><strong>🔐 Bảo mật:</strong> Dữ liệu được mã hóa AES-256 + HEX trước khi upload lên Firebase</p>
+                    <p><strong>📖 Hướng dẫn:</strong> Tạo Firebase project tại <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a></p>
+                </div>
+
+                <label>API Key:</label>
+                <input type="text" id="firebaseApiKey" class="modal-input" placeholder="AIzaSy...">
+
+                <label>Auth Domain:</label>
+                <input type="text" id="firebaseAuthDomain" class="modal-input" placeholder="your-project.firebaseapp.com">
+
+                <label>Project ID:</label>
+                <input type="text" id="firebaseProjectId" class="modal-input" placeholder="your-project-id">
+
+                <label>Storage Bucket:</label>
+                <input type="text" id="firebaseStorageBucket" class="modal-input" placeholder="your-project.appspot.com">
+
+                <label>Messaging Sender ID:</label>
+                <input type="text" id="firebaseMessagingSenderId" class="modal-input" placeholder="123456789">
+
+                <label>App ID:</label>
+                <input type="text" id="firebaseAppId" class="modal-input" placeholder="1:123456789:web:abc...">
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="testConnection">🧪 Kiểm tra kết nối</button>
+                <button class="btn btn-primary" id="saveFirebaseConfig">💾 Lưu cấu hình</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="auth.js"></script>
+    <script src="encryption.js"></script>
+    <script src="firebase-manager.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Logout function
+        function logout() {
+            if (confirm('Bạn có chắc muốn đăng xuất?')) {
+                authManager.logout();
+            }
+        }
+
+        // Check authentication on page load
+        window.addEventListener('load', () => {
+            // Auth check is handled in auth.js
+        });
+    </script>
+</body>
+</html>
