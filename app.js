@@ -57,6 +57,7 @@ class IdeasManager {
         document.getElementById('closeModal').addEventListener('click', () => this.closeModal());
         document.getElementById('saveBtn').addEventListener('click', () => this.saveEditedIdea());
         document.getElementById('deleteBtn').addEventListener('click', () => this.deleteIdea());
+        document.getElementById('toggleCompleteBtn').addEventListener('click', () => this.toggleComplete());
 
         // Close modal on outside click
         document.getElementById('ideaModal').addEventListener('click', (e) => {
@@ -89,6 +90,7 @@ class IdeasManager {
             title: randomIdea + ' - Test ' + Date.now(),
             content: '',
             tags: [],
+            completed: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -125,6 +127,7 @@ class IdeasManager {
                 title,
                 content: '',
                 tags: [],
+                completed: false,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
@@ -153,6 +156,18 @@ class IdeasManager {
 
         document.getElementById('editTitle').value = idea.title;
         document.getElementById('modalDate').textContent = `Tạo: ${this.formatDate(idea.createdAt)}`;
+
+        // Update complete button text
+        const toggleBtn = document.getElementById('toggleCompleteBtn');
+        if (idea.completed) {
+            toggleBtn.textContent = '✓ Đã hoàn thành';
+            toggleBtn.style.background = 'var(--success)';
+            toggleBtn.style.color = 'white';
+        } else {
+            toggleBtn.textContent = 'Đánh dấu hoàn thành';
+            toggleBtn.style.background = '';
+            toggleBtn.style.color = '';
+        }
 
         document.getElementById('ideaModal').classList.add('show');
     }
@@ -183,6 +198,32 @@ class IdeasManager {
         this.showNotification('Đã lưu!', 'success');
     }
 
+    // Toggle Complete Status
+    async toggleComplete() {
+        const idea = this.ideas.find(i => i.id === this.currentEditId);
+        if (!idea) return;
+
+        idea.completed = !idea.completed;
+        idea.updatedAt = new Date().toISOString();
+
+        // Update button appearance
+        const toggleBtn = document.getElementById('toggleCompleteBtn');
+        if (idea.completed) {
+            toggleBtn.textContent = '✓ Đã hoàn thành';
+            toggleBtn.style.background = 'var(--success)';
+            toggleBtn.style.color = 'white';
+            this.showNotification('Đã đánh dấu hoàn thành!', 'success');
+        } else {
+            toggleBtn.textContent = 'Đánh dấu hoàn thành';
+            toggleBtn.style.background = '';
+            toggleBtn.style.color = '';
+            this.showNotification('Đã bỏ đánh dấu hoàn thành!', 'success');
+        }
+
+        await this.saveToFirebase();
+        this.renderIdeas();
+    }
+
     // Delete Idea
     async deleteIdea() {
         if (!confirm('Bạn có chắc muốn xóa?')) return;
@@ -211,7 +252,7 @@ class IdeasManager {
         emptyState.classList.remove('show');
 
         grid.innerHTML = ideasToRender.map(idea => `
-            <div class="idea-card" data-id="${idea.id}">
+            <div class="idea-card ${idea.completed ? 'completed' : ''}" data-id="${idea.id}">
                 <div class="idea-header">
                     <div class="idea-title">${this.escapeHtml(idea.title)}</div>
                     <div class="idea-date">${this.formatDate(idea.createdAt)}</div>

@@ -245,6 +245,11 @@ textarea {
     overflow: hidden;
 }
 
+.idea-card.completed {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
+    border-color: var(--success);
+}
+
 .idea-card::before {
     content: '';
     position: absolute;
@@ -255,6 +260,11 @@ textarea {
     background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
     transform: scaleX(0);
     transition: transform 0.3s ease;
+}
+
+.idea-card.completed::before {
+    background: linear-gradient(90deg, var(--success) 0%, #059669 100%);
+    transform: scaleX(1);
 }
 
 .idea-card:hover::before {
@@ -277,6 +287,15 @@ textarea {
     color: var(--text-primary);
     margin-bottom: 8px;
     word-break: break-word;
+}
+
+.idea-card.completed .idea-title {
+    color: var(--success);
+}
+
+.idea-card.completed .idea-title::before {
+    content: '✓ ';
+    margin-right: 5px;
 }
 
 .idea-date {
