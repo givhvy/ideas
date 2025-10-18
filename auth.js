@@ -37,7 +37,10 @@ class AuthManager {
     }
 
     setupAuthListener() {
-        if (!this.auth) return;
+        if (!this.auth) {
+            console.error('[Auth] Firebase auth not initialized');
+            return;
+        }
 
         let isRedirecting = false;
 
@@ -51,20 +54,39 @@ class AuthManager {
             const isLoginPage = currentPath.includes('login.html') || currentPath === '/login';
             const isAppPage = currentPath.includes('index.html') || currentPath === '/' || currentPath === '/index';
 
+            console.log('[Auth] onAuthStateChanged fired');
             console.log('[Auth] Path check:', { currentPath, isLoginPage, isAppPage, user: user?.email || 'none' });
 
             // If on login page and user is logged in, redirect to app
             if (isLoginPage && user) {
-                console.log('[Auth] Redirecting to app...');
+                console.log('[Auth] User logged in on login page - redirecting to app...');
                 isRedirecting = true;
-                window.location.href = 'index.html';
+                window.location.replace('index.html');
             }
             // If on app page and user is not logged in, redirect to login
             else if (isAppPage && !user) {
-                console.log('[Auth] Redirecting to login...');
+                console.log('[Auth] No user on app page - redirecting to login...');
                 isRedirecting = true;
-                window.location.href = 'login.html';
+                window.location.replace('login.html');
+            } else {
+                console.log('[Auth] No redirect needed');
             }
+        });
+    }
+
+    // Wait for auth to be ready
+    waitForAuth() {
+        return new Promise((resolve) => {
+            if (!this.auth) {
+                console.error('[Auth] No auth instance');
+                resolve(null);
+                return;
+            }
+
+            const unsubscribe = this.auth.onAuthStateChanged((user) => {
+                unsubscribe();
+                resolve(user);
+            });
         });
     }
 
