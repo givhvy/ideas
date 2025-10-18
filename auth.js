@@ -3,36 +3,59 @@ class AuthManager {
     constructor() {
         this.auth = null;
         this.currentUser = null;
-        this.init();
+        this.initPromise = this.init();
     }
 
     async init() {
+        console.log('[Auth] Initializing AuthManager...');
         // Wait for Firebase config
         await this.loadFirebaseConfig();
         this.setupAuthListener();
+        console.log('[Auth] AuthManager initialized, auth:', this.auth ? 'ready' : 'not ready');
+    }
+
+    // Ensure auth is ready before use
+    async ensureReady() {
+        await this.initPromise;
+        if (!this.auth) {
+            throw new Error('Firebase chưa được cấu hình. Vui lòng cấu hình Firebase trước.');
+        }
     }
 
     async loadFirebaseConfig() {
+        // Wait a bit for firebase-config.js to execute
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         const config = localStorage.getItem('firebase_config');
 
-        if (config) {
-            try {
-                const parsedConfig = JSON.parse(config);
-                if (!firebase.apps.length) {
-                    firebase.initializeApp(parsedConfig);
-                }
-                this.auth = firebase.auth();
+        if (!config) {
+            console.error('[Auth] No Firebase config found in localStorage');
+            return;
+        }
 
-                // Check remember me setting
-                const rememberMe = localStorage.getItem('rememberMe') === 'true';
-                const persistence = rememberMe ?
-                    firebase.auth.Auth.Persistence.LOCAL :
-                    firebase.auth.Auth.Persistence.SESSION;
+        try {
+            const parsedConfig = JSON.parse(config);
+            console.log('[Auth] Firebase config loaded from localStorage');
 
-                await this.auth.setPersistence(persistence);
-            } catch (error) {
-                console.error('Error loading Firebase config:', error);
+            if (!firebase.apps.length) {
+                firebase.initializeApp(parsedConfig);
+                console.log('[Auth] Firebase app initialized');
+            } else {
+                console.log('[Auth] Firebase app already initialized');
             }
+
+            this.auth = firebase.auth();
+
+            // Check remember me setting
+            const rememberMe = localStorage.getItem('rememberMe') === 'true';
+            const persistence = rememberMe ?
+                firebase.auth.Auth.Persistence.LOCAL :
+                firebase.auth.Auth.Persistence.SESSION;
+
+            await this.auth.setPersistence(persistence);
+            console.log('[Auth] Persistence set to:', rememberMe ? 'LOCAL' : 'SESSION');
+        } catch (error) {
+            console.error('[Auth] Error loading Firebase config:', error);
         }
     }
 
@@ -91,9 +114,7 @@ class AuthManager {
     }
 
     async login(email, password, rememberMe) {
-        if (!this.auth) {
-            throw new Error('Firebase chưa được cấu hình. Vui lòng cấu hình Firebase trước.');
-        }
+        await this.ensureReady();
 
         try {
             // Set persistence based on remember me
