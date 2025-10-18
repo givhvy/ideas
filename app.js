@@ -349,5 +349,11 @@ style.textContent = `
 document.head.appendChild(style);
 
 // Initialize app and expose globally
-const app = new IdeasManager();
-window.app = app;
+// Don't auto-initialize - wait for auth check first
+window.initApp = function() {
+    if (!window.app) {
+        console.log('[App] Initializing app...');
+        window.app = new IdeasManager();
+    }
+    return window.app;
+};

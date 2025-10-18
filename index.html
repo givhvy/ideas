@@ -91,6 +91,32 @@
     <script src="firebase-manager.js"></script>
     <script src="app.js"></script>
     <script>
+        // Wait for auth before initializing app
+        (async function() {
+            console.log('[Main] Waiting for auth check...');
+
+            // Wait for auth to complete
+            const user = await authManager.waitForAuth();
+
+            console.log('[Main] Auth check complete, user:', user?.email || 'none');
+
+            // If no user, redirect will happen automatically via onAuthStateChanged
+            // Only initialize app if user exists
+            if (user) {
+                console.log('[Main] User authenticated, initializing app...');
+                window.initApp();
+            } else {
+                console.log('[Main] No user - page should redirect to login');
+                // Force redirect if it hasn't happened yet
+                setTimeout(() => {
+                    if (!authManager.isAuthenticated()) {
+                        console.log('[Main] Forcing redirect to login...');
+                        window.location.replace('login.html');
+                    }
+                }, 100);
+            }
+        })();
+
         // Logout function
         function logout() {
             if (confirm('Bạn có chắc muốn đăng xuất?')) {
