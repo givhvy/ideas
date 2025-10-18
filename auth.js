@@ -110,10 +110,13 @@ class AuthManager {
         if (!this.auth) return;
 
         try {
+            console.log('[Auth] Logging out...');
             await this.auth.signOut();
-            window.location.href = 'login.html';
+            console.log('[Auth] Sign out successful, redirecting to login...');
+            // Force redirect immediately
+            window.location.replace('login.html');
         } catch (error) {
-            console.error('Logout error:', error);
+            console.error('[Auth] Logout error:', error);
         }
     }
 

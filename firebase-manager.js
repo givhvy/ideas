@@ -100,7 +100,8 @@ class FirebaseManager {
     // Real-time sync listener - automatically updates when data changes
     setupRealtimeSync(onUpdate) {
         if (!this.isReady()) {
-            throw new Error('Firebase not configured');
+            console.error('[Firebase] Cannot setup realtime sync - not ready');
+            throw new Error('Firebase not configured or user not authenticated');
         }
 
         const userRef = this.db.collection('users').doc(this.userId);
@@ -113,14 +114,21 @@ class FirebaseManager {
                     const data = doc.data();
                     const ideas = data.ideas || [];
                     console.log('[Firebase] Realtime update received:', ideas.length, 'ideas');
+                    console.log('[Firebase] Ideas data:', ideas);
                     onUpdate(ideas);
                 } else {
-                    console.log('[Firebase] No data exists yet');
+                    console.log('[Firebase] No data exists yet for user:', this.userId);
+                    console.log('[Firebase] Creating empty ideas array');
                     onUpdate([]);
                 }
             },
             (error) => {
                 console.error('[Firebase] Realtime sync error:', error);
+                console.error('[Firebase] Error details:', error.code, error.message);
+                // Show user-friendly error
+                if (error.code === 'permission-denied') {
+                    alert('Lỗi: Không có quyền truy cập Firestore. Vui lòng kiểm tra Firestore Rules.');
+                }
             }
         );
     }
