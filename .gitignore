@@ -18,3 +18,9 @@ Thumbs.db
 # Notes
 notes.txt
 todo.txt
+
+# Dependencies
+node_modules/
+
+# Firebase config (contains sensitive data)
+firebase-config.js

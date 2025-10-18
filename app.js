@@ -11,8 +11,17 @@ class IdeasManager {
     }
 
     init() {
+        console.log('[App] Initializing...');
+
         // Initialize encryption
         this.encryption = new EncryptionManager();
+
+        // Expose encryption manager globally for auth.js to access
+        window.encryptionManager = this.encryption;
+
+        // Check if encryption key is available
+        const hasKey = this.encryption.getEncryptionKey();
+        console.log('[App] Encryption key available:', !!hasKey);
 
         // Initialize Firebase
         this.firebase = new FirebaseManager(this.encryption);
@@ -21,18 +30,21 @@ class IdeasManager {
         this.setupEventListeners();
         this.renderIdeas();
         this.updateStats();
-        this.renderFilterTags();
         this.updateSyncStatus();
+
+        console.log('[App] Initialization complete. Ideas count:', this.ideas.length);
     }
 
     // Local Storage Operations
     loadIdeas() {
         const stored = localStorage.getItem('myIdeas');
         this.ideas = stored ? JSON.parse(stored) : [];
+        console.log('[App] Loaded ideas from localStorage:', this.ideas.length);
     }
 
     saveIdeas() {
         localStorage.setItem('myIdeas', JSON.stringify(this.ideas));
+        console.log('[App] Saved ideas to localStorage:', this.ideas.length);
     }
 
     // Event Listeners
@@ -40,6 +52,9 @@ class IdeasManager {
         // Add/Update idea
         document.getElementById('addBtn').addEventListener('click', () => this.addOrUpdateIdea());
         document.getElementById('cancelBtn').addEventListener('click', () => this.cancelEdit());
+
+        // Test button to quickly add sample ideas
+        document.getElementById('testAddBtn').addEventListener('click', () => this.addTestIdea());
 
         // Search
         document.getElementById('searchInput').addEventListener('input', (e) => {
@@ -65,16 +80,38 @@ class IdeasManager {
             }
         });
 
-        // Firebase config modal
-        document.getElementById('openFirebaseConfig').addEventListener('click', () => this.openFirebaseConfigModal());
-        document.getElementById('closeConfigModal').addEventListener('click', () => this.closeFirebaseConfigModal());
-        document.getElementById('saveFirebaseConfig').addEventListener('click', () => this.saveFirebaseConfig());
-        document.getElementById('testConnection').addEventListener('click', () => this.testFirebaseConnection());
-
         // Sync buttons
         document.getElementById('syncNowBtn').addEventListener('click', () => this.syncNow());
         document.getElementById('loadFromFirebaseBtn').addEventListener('click', () => this.loadFromFirebase());
         document.getElementById('toggleRealtimeSync').addEventListener('click', () => this.toggleRealtimeSync());
+    }
+
+    // Test function to add sample idea
+    addTestIdea() {
+        const testIdeas = [
+            'Tạo ứng dụng quản lý tài chính cá nhân',
+            'Học React Native để làm app mobile',
+            'Viết blog về lập trình',
+            'Tạo Chrome extension hữu ích',
+            'Học Machine Learning cơ bản'
+        ];
+
+        const randomIdea = testIdeas[Math.floor(Math.random() * testIdeas.length)];
+        const newIdea = {
+            id: Date.now(),
+            title: randomIdea + ' - Test ' + Date.now(),
+            content: '',
+            tags: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        console.log('[App] Adding test idea:', newIdea.title);
+        this.ideas.unshift(newIdea);
+        this.saveIdeas();
+        this.renderIdeas();
+        this.updateStats();
+        this.showNotification('Đã thêm ý tưởng test!', 'success');
     }
 
     // Create/Update Idea
@@ -183,9 +220,12 @@ class IdeasManager {
         const grid = document.getElementById('ideasGrid');
         const emptyState = document.getElementById('emptyState');
 
+        console.log('[App] Rendering ideas:', ideasToRender.length);
+
         if (ideasToRender.length === 0) {
             grid.innerHTML = '';
             emptyState.classList.add('show');
+            console.log('[App] No ideas to render, showing empty state');
             return;
         }
 
@@ -285,72 +325,10 @@ class IdeasManager {
         }, 3000);
     }
 
-    // Firebase Configuration Modal
-    openFirebaseConfigModal() {
-        const savedConfig = localStorage.getItem('firebase_config');
-        if (savedConfig) {
-            const config = JSON.parse(savedConfig);
-            document.getElementById('firebaseApiKey').value = config.apiKey || '';
-            document.getElementById('firebaseAuthDomain').value = config.authDomain || '';
-            document.getElementById('firebaseProjectId').value = config.projectId || '';
-            document.getElementById('firebaseStorageBucket').value = config.storageBucket || '';
-            document.getElementById('firebaseMessagingSenderId').value = config.messagingSenderId || '';
-            document.getElementById('firebaseAppId').value = config.appId || '';
-        }
-
-        document.getElementById('firebaseConfigModal').classList.add('show');
-    }
-
-    closeFirebaseConfigModal() {
-        document.getElementById('firebaseConfigModal').classList.remove('show');
-    }
-
-    async saveFirebaseConfig() {
-        const config = {
-            apiKey: document.getElementById('firebaseApiKey').value.trim(),
-            authDomain: document.getElementById('firebaseAuthDomain').value.trim(),
-            projectId: document.getElementById('firebaseProjectId').value.trim(),
-            storageBucket: document.getElementById('firebaseStorageBucket').value.trim(),
-            messagingSenderId: document.getElementById('firebaseMessagingSenderId').value.trim(),
-            appId: document.getElementById('firebaseAppId').value.trim()
-        };
-
-        if (!config.apiKey || !config.projectId) {
-            this.showNotification('Vui lòng nhập đầy đủ thông tin!', 'warning');
-            return;
-        }
-
-        try {
-            this.firebase.saveConfig(config);
-            await this.firebase.initializeFirebase(config);
-            this.showNotification('Đã lưu cấu hình Firebase!', 'success');
-            this.updateSyncStatus();
-            this.closeFirebaseConfigModal();
-        } catch (error) {
-            this.showNotification('Lỗi: ' + error.message, 'warning');
-        }
-    }
-
-    async testFirebaseConnection() {
-        if (!this.firebase.isReady()) {
-            this.showNotification('Vui lòng cấu hình Firebase trước!', 'warning');
-            return;
-        }
-
-        try {
-            this.showNotification('Đang kiểm tra kết nối...', 'info');
-            await this.firebase.syncToFirebase([]);
-            this.showNotification('Kết nối Firebase thành công!', 'success');
-        } catch (error) {
-            this.showNotification('Lỗi kết nối: ' + error.message, 'warning');
-        }
-    }
-
     // Firebase Sync Operations
     async syncNow() {
         if (!this.firebase.isReady()) {
-            this.showNotification('Vui lòng cấu hình Firebase trước!', 'warning');
-            this.openFirebaseConfigModal();
+            this.showNotification('Firebase chưa sẵn sàng. Vui lòng đợi...', 'warning');
             return;
         }
 
@@ -369,8 +347,7 @@ class IdeasManager {
 
     async loadFromFirebase() {
         if (!this.firebase.isReady()) {
-            this.showNotification('Vui lòng cấu hình Firebase trước!', 'warning');
-            this.openFirebaseConfigModal();
+            this.showNotification('Firebase chưa sẵn sàng. Vui lòng đợi...', 'warning');
             return;
         }
 
@@ -404,8 +381,7 @@ class IdeasManager {
 
     toggleRealtimeSync() {
         if (!this.firebase.isReady()) {
-            this.showNotification('Vui lòng cấu hình Firebase trước!', 'warning');
-            this.openFirebaseConfigModal();
+            this.showNotification('Firebase chưa sẵn sàng. Vui lòng đợi...', 'warning');
             return;
         }
 
@@ -439,6 +415,12 @@ class IdeasManager {
     updateSyncStatus(status = null) {
         const statusElement = document.getElementById('syncStatus');
         const encryptionInfo = this.encryption.getEncryptionInfo();
+        const isReady = this.firebase.isReady();
+
+        console.log('[App] Update sync status - Firebase ready:', isReady,
+                    'Config:', this.firebase.isConfigured,
+                    'DB:', !!this.firebase.db,
+                    'UserID:', this.firebase.userId);
 
         if (status === 'syncing') {
             statusElement.innerHTML = '<span style="color: #f59e0b;">⏳ Đang đồng bộ...</span>';
@@ -448,7 +430,7 @@ class IdeasManager {
             statusElement.innerHTML = '<span style="color: #ef4444;">✗ Lỗi đồng bộ</span>';
         } else {
             const lastSync = localStorage.getItem('lastSyncTime');
-            if (this.firebase.isReady()) {
+            if (isReady) {
                 if (lastSync) {
                     const syncDate = new Date(lastSync);
                     statusElement.innerHTML = `
@@ -459,14 +441,14 @@ class IdeasManager {
                     statusElement.innerHTML = `<span style="color: #f59e0b;">⚠️ Chưa đồng bộ | 🔒 Mã hóa: ${encryptionInfo.algorithm}</span>`;
                 }
             } else {
-                statusElement.innerHTML = '<span style="color: #94a3b8;">❌ Chưa cấu hình Firebase | 🔒 Local: ' + encryptionInfo.algorithm + '</span>';
+                statusElement.innerHTML = '<span style="color: #94a3b8;">⏳ Đang kết nối Firebase... | 🔒 Local: ' + encryptionInfo.algorithm + '</span>';
             }
         }
 
         // Update button states
         const syncBtns = document.querySelectorAll('.sync-btn');
         syncBtns.forEach(btn => {
-            if (this.firebase.isReady()) {
+            if (isReady) {
                 btn.disabled = false;
                 btn.style.opacity = '1';
             } else {
@@ -504,5 +486,6 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Initialize app
+// Initialize app and expose globally
 const app = new IdeasManager();
+window.app = app;

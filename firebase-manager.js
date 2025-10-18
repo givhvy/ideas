@@ -38,8 +38,39 @@ class FirebaseManager {
 
             this.db = firebase.firestore();
 
-            // Generate or get unique user ID for this device
-            this.userId = this.getOrCreateUserId();
+            // Set up auth listener to get user ID from Firebase Auth
+            firebase.auth().onAuthStateChanged(async (user) => {
+                if (user) {
+                    this.userId = user.uid; // Use Firebase Auth UID
+                    console.log('User authenticated, ID:', this.userId);
+
+                    // Update sync status UI to enable buttons
+                    if (window.app) {
+                        window.app.updateSyncStatus();
+                    }
+
+                    // Auto-load data from Firebase when user logs in
+                    // Only if local storage is empty or has very few ideas
+                    const localData = localStorage.getItem('myIdeas');
+                    const localIdeas = localData ? JSON.parse(localData) : [];
+
+                    if (localIdeas.length === 0) {
+                        console.log('No local data found. Auto-loading from Firebase...');
+                        try {
+                            // Wait a bit for app to initialize
+                            setTimeout(async () => {
+                                if (window.app) {
+                                    await window.app.loadFromFirebase();
+                                }
+                            }, 1000);
+                        } catch (error) {
+                            console.log('Auto-load skipped:', error.message);
+                        }
+                    }
+                } else {
+                    this.userId = null;
+                }
+            });
 
             this.isConfigured = true;
             console.log('Firebase initialized successfully');
@@ -64,19 +95,9 @@ class FirebaseManager {
         }
     }
 
-    // Get or create unique user ID
-    getOrCreateUserId() {
-        let userId = localStorage.getItem('firebase_user_id');
-        if (!userId) {
-            userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            localStorage.setItem('firebase_user_id', userId);
-        }
-        return userId;
-    }
-
-    // Check if Firebase is configured
+    // Check if Firebase is configured and user is authenticated
     isReady() {
-        return this.isConfigured && this.db !== null;
+        return this.isConfigured && this.db !== null && this.userId !== null;
     }
 
     // Sync all ideas to Firebase

@@ -39,15 +39,22 @@ class AuthManager {
     setupAuthListener() {
         if (!this.auth) return;
 
+        let isRedirecting = false;
+
         this.auth.onAuthStateChanged((user) => {
             this.currentUser = user;
 
+            // Prevent multiple redirects
+            if (isRedirecting) return;
+
             // If on login page and user is logged in, redirect to app
             if (window.location.pathname.includes('login.html') && user) {
+                isRedirecting = true;
                 window.location.href = 'index.html';
             }
             // If on app page and user is not logged in, redirect to login
             else if (window.location.pathname.includes('index.html') && !user) {
+                isRedirecting = true;
                 window.location.href = 'login.html';
             }
         });
@@ -71,7 +78,14 @@ class AuthManager {
 
             // Sign in
             const result = await this.auth.signInWithEmailAndPassword(email, password);
-            return { success: true, user: result.user };
+
+            // Set encryption key from password for cross-device sync
+            // This allows all devices with the same password to decrypt data
+            if (window.encryptionManager) {
+                window.encryptionManager.setEncryptionKey(password);
+            }
+
+            return { success: true, user: result.user, password: password };
         } catch (error) {
             console.error('Login error:', error);
 
@@ -94,6 +108,11 @@ class AuthManager {
         if (!this.auth) return;
 
         try {
+            // Clear encryption key before logout
+            if (window.encryptionManager) {
+                window.encryptionManager.clearEncryptionKey();
+            }
+
             await this.auth.signOut();
             window.location.href = 'login.html';
         } catch (error) {
@@ -133,6 +152,7 @@ if (document.getElementById('loginForm')) {
             const result = await authManager.login(email, password, rememberMe);
 
             if (result.success) {
+                // Password is already set in encryption manager via login()
                 // Redirect will happen automatically via onAuthStateChanged
             } else {
                 errorMessage.textContent = result.error;

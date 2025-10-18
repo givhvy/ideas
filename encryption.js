@@ -1,23 +1,45 @@
 // Encryption Utility using AES-256
 class EncryptionManager {
     constructor() {
-        // Generate or retrieve device-specific encryption key
-        this.encryptionKey = this.getOrCreateEncryptionKey();
+        // Encryption key will be set from user's password after login
+        this.encryptionKey = null;
     }
 
-    // Get or create a SHARED encryption key for all devices
-    getOrCreateEncryptionKey() {
-        let key = localStorage.getItem('_shared_encryption_key');
+    // Set encryption key from user's password
+    setEncryptionKey(password) {
+        // Derive a strong key from the user's password
+        // Using SHA-256 to create a consistent key from the password
+        this.encryptionKey = CryptoJS.SHA256(password).toString();
 
-        if (!key) {
-            // Use a fixed master key derived from app identifier
-            // This ensures all devices using the same account can decrypt data
-            const masterSeed = 'MyIdeasApp_SharedKey_2024'; // Fixed seed
-            key = CryptoJS.SHA256(masterSeed).toString();
-            localStorage.setItem('_shared_encryption_key', key);
+        // Store in sessionStorage (or localStorage based on remember me)
+        const rememberMe = localStorage.getItem('rememberMe') === 'true';
+        if (rememberMe) {
+            localStorage.setItem('_user_encryption_key', this.encryptionKey);
+        } else {
+            sessionStorage.setItem('_user_encryption_key', this.encryptionKey);
+        }
+    }
+
+    // Get encryption key from storage
+    getEncryptionKey() {
+        if (this.encryptionKey) {
+            return this.encryptionKey;
         }
 
-        return key;
+        // Try to retrieve from storage
+        this.encryptionKey = localStorage.getItem('_user_encryption_key') ||
+                           sessionStorage.getItem('_user_encryption_key');
+
+        return this.encryptionKey;
+    }
+
+    // Clear encryption key on logout
+    clearEncryptionKey() {
+        this.encryptionKey = null;
+        localStorage.removeItem('_user_encryption_key');
+        sessionStorage.removeItem('_user_encryption_key');
+        // Also clear old shared key if exists
+        localStorage.removeItem('_shared_encryption_key');
     }
 
     // Generate device fingerprint for unique key generation
@@ -43,8 +65,13 @@ class EncryptionManager {
     // Encrypt data using AES-256
     encrypt(data) {
         try {
+            const key = this.getEncryptionKey();
+            if (!key) {
+                throw new Error('Encryption key not set. Please login first.');
+            }
+
             const jsonString = JSON.stringify(data);
-            const encrypted = CryptoJS.AES.encrypt(jsonString, this.encryptionKey).toString();
+            const encrypted = CryptoJS.AES.encrypt(jsonString, key).toString();
 
             // Convert to hex for additional obfuscation
             const hexEncrypted = this.stringToHex(encrypted);
@@ -59,10 +86,15 @@ class EncryptionManager {
     // Decrypt data
     decrypt(encryptedData) {
         try {
+            const key = this.getEncryptionKey();
+            if (!key) {
+                throw new Error('Encryption key not set. Please login first.');
+            }
+
             // Convert from hex back to encrypted string
             const encrypted = this.hexToString(encryptedData);
 
-            const decrypted = CryptoJS.AES.decrypt(encrypted, this.encryptionKey);
+            const decrypted = CryptoJS.AES.decrypt(encrypted, key);
             const jsonString = decrypted.toString(CryptoJS.enc.Utf8);
 
             if (!jsonString) {
@@ -124,10 +156,11 @@ class EncryptionManager {
 
     // Get encryption info for display
     getEncryptionInfo() {
+        const key = this.getEncryptionKey();
         return {
             algorithm: 'AES-256',
             encoding: 'HEX',
-            keyHash: CryptoJS.SHA256(this.encryptionKey).toString().substring(0, 16) + '...'
+            keyHash: key ? CryptoJS.SHA256(key).toString().substring(0, 16) + '...' : 'Not set'
         };
     }
 }
