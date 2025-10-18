@@ -47,13 +47,21 @@ class AuthManager {
             // Prevent multiple redirects
             if (isRedirecting) return;
 
+            const currentPath = window.location.pathname;
+            const isLoginPage = currentPath.includes('login.html') || currentPath === '/login';
+            const isAppPage = currentPath.includes('index.html') || currentPath === '/' || currentPath === '/index';
+
+            console.log('[Auth] Path check:', { currentPath, isLoginPage, isAppPage, user: user?.email || 'none' });
+
             // If on login page and user is logged in, redirect to app
-            if (window.location.pathname.includes('login.html') && user) {
+            if (isLoginPage && user) {
+                console.log('[Auth] Redirecting to app...');
                 isRedirecting = true;
                 window.location.href = 'index.html';
             }
             // If on app page and user is not logged in, redirect to login
-            else if (window.location.pathname.includes('index.html') && !user) {
+            else if (isAppPage && !user) {
+                console.log('[Auth] Redirecting to login...');
                 isRedirecting = true;
                 window.location.href = 'login.html';
             }
