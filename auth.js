@@ -23,19 +23,24 @@ class AuthManager {
     }
 
     async loadFirebaseConfig() {
-        // Wait a bit for firebase-config.js to execute
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Try to get config from window first (synchronous), then localStorage
+        let parsedConfig = window.FIREBASE_CONFIG;
 
-        const config = localStorage.getItem('firebase_config');
+        if (!parsedConfig) {
+            console.log('[Auth] No config in window.FIREBASE_CONFIG, trying localStorage...');
+            const configStr = localStorage.getItem('firebase_config');
+            if (configStr) {
+                parsedConfig = JSON.parse(configStr);
+            }
+        }
 
-        if (!config) {
-            console.error('[Auth] No Firebase config found in localStorage');
+        if (!parsedConfig) {
+            console.error('[Auth] No Firebase config found in window or localStorage');
             return;
         }
 
         try {
-            const parsedConfig = JSON.parse(config);
-            console.log('[Auth] Firebase config loaded from localStorage');
+            console.log('[Auth] Firebase config loaded:', parsedConfig.projectId);
 
             if (!firebase.apps.length) {
                 firebase.initializeApp(parsedConfig);
