@@ -1,7 +1,6 @@
-// Firebase Manager with Encryption
+// Firebase Manager (Shared Data - No Encryption)
 class FirebaseManager {
-    constructor(encryptionManager) {
-        this.encryption = encryptionManager;
+    constructor() {
         this.db = null;
         this.userId = null;
         this.isConfigured = false;
@@ -42,33 +41,10 @@ class FirebaseManager {
             firebase.auth().onAuthStateChanged(async (user) => {
                 if (user) {
                     this.userId = user.uid; // Use Firebase Auth UID
-                    console.log('User authenticated, ID:', this.userId);
-
-                    // Update sync status UI to enable buttons
-                    if (window.app) {
-                        window.app.updateSyncStatus();
-                    }
-
-                    // Auto-load data from Firebase when user logs in
-                    // Only if local storage is empty or has very few ideas
-                    const localData = localStorage.getItem('myIdeas');
-                    const localIdeas = localData ? JSON.parse(localData) : [];
-
-                    if (localIdeas.length === 0) {
-                        console.log('No local data found. Auto-loading from Firebase...');
-                        try {
-                            // Wait a bit for app to initialize
-                            setTimeout(async () => {
-                                if (window.app) {
-                                    await window.app.loadFromFirebase();
-                                }
-                            }, 1000);
-                        } catch (error) {
-                            console.log('Auto-load skipped:', error.message);
-                        }
-                    }
+                    console.log('[Firebase] User authenticated, ID:', this.userId);
                 } else {
                     this.userId = null;
+                    console.log('[Firebase] User signed out');
                 }
             });
 
@@ -100,108 +76,28 @@ class FirebaseManager {
         return this.isConfigured && this.db !== null && this.userId !== null;
     }
 
-    // Sync all ideas to Firebase
-    async syncToFirebase(ideas) {
-        if (!this.isReady()) {
-            throw new Error('Firebase not configured');
-        }
-
-        this.isSyncing = true;
-
-        try {
-            const batch = this.db.batch();
-            const userRef = this.db.collection('users').doc(this.userId);
-
-            // Encrypt and prepare ideas
-            const encryptedIdeas = ideas.map(idea => this.encryption.encryptIdea(idea));
-
-            // Store encrypted ideas
-            const ideasData = {
-                ideas: encryptedIdeas,
-                lastSync: firebase.firestore.FieldValue.serverTimestamp(),
-                deviceId: this.encryption.getDeviceFingerprint()
-            };
-
-            batch.set(userRef, ideasData);
-
-            await batch.commit();
-
-            this.isSyncing = false;
-            return {
-                success: true,
-                count: ideas.length,
-                timestamp: new Date()
-            };
-        } catch (error) {
-            this.isSyncing = false;
-            console.error('Sync error:', error);
-            throw error;
-        }
-    }
-
-    // Load ideas from Firebase
-    async loadFromFirebase() {
+    // Save ideas to Firebase (simple)
+    async saveIdeas(ideas) {
         if (!this.isReady()) {
             throw new Error('Firebase not configured');
         }
 
         try {
             const userRef = this.db.collection('users').doc(this.userId);
-            const doc = await userRef.get();
 
-            if (!doc.exists) {
-                return {
-                    success: true,
-                    ideas: [],
-                    message: 'No data found in Firebase'
-                };
-            }
-
-            const data = doc.data();
-            const encryptedIdeas = data.ideas || [];
-
-            // Decrypt ideas
-            const ideas = encryptedIdeas.map(encrypted => {
-                try {
-                    return this.encryption.decryptIdea(encrypted);
-                } catch (error) {
-                    console.error('Failed to decrypt idea:', encrypted.id, error);
-                    return null;
-                }
-            }).filter(idea => idea !== null);
-
-            return {
-                success: true,
+            await userRef.set({
                 ideas: ideas,
-                lastSync: data.lastSync?.toDate() || null
-            };
+                lastSync: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            return { success: true };
         } catch (error) {
-            console.error('Load error:', error);
+            console.error('Save error:', error);
             throw error;
         }
     }
 
-    // Auto-sync: sync to Firebase periodically
-    async autoSync(ideas, intervalMinutes = 5) {
-        if (!this.isReady()) return;
-
-        const sync = async () => {
-            try {
-                await this.syncToFirebase(ideas);
-                console.log('Auto-sync completed');
-            } catch (error) {
-                console.error('Auto-sync failed:', error);
-            }
-        };
-
-        // Initial sync
-        await sync();
-
-        // Set up periodic sync
-        setInterval(sync, intervalMinutes * 60 * 1000);
-    }
-
-    // Real-time sync listener
+    // Real-time sync listener - automatically updates when data changes
     setupRealtimeSync(onUpdate) {
         if (!this.isReady()) {
             throw new Error('Firebase not configured');
@@ -209,26 +105,22 @@ class FirebaseManager {
 
         const userRef = this.db.collection('users').doc(this.userId);
 
+        console.log('[Firebase] Setting up realtime sync for user:', this.userId);
+
         return userRef.onSnapshot(
             (doc) => {
                 if (doc.exists) {
                     const data = doc.data();
-                    const encryptedIdeas = data.ideas || [];
-
-                    const ideas = encryptedIdeas.map(encrypted => {
-                        try {
-                            return this.encryption.decryptIdea(encrypted);
-                        } catch (error) {
-                            console.error('Failed to decrypt idea:', error);
-                            return null;
-                        }
-                    }).filter(idea => idea !== null);
-
-                    onUpdate(ideas, data.lastSync?.toDate());
+                    const ideas = data.ideas || [];
+                    console.log('[Firebase] Realtime update received:', ideas.length, 'ideas');
+                    onUpdate(ideas);
+                } else {
+                    console.log('[Firebase] No data exists yet');
+                    onUpdate([]);
                 }
             },
             (error) => {
-                console.error('Realtime sync error:', error);
+                console.error('[Firebase] Realtime sync error:', error);
             }
         );
     }

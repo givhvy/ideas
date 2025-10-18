@@ -4,47 +4,39 @@ class IdeasManager {
         this.ideas = [];
         this.currentEditId = null;
         this.activeFilter = null;
-        this.encryption = null;
         this.firebase = null;
-        this.realtimeSyncUnsubscribe = null;
         this.init();
     }
 
     init() {
         console.log('[App] Initializing...');
 
-        // Initialize encryption
-        this.encryption = new EncryptionManager();
+        // Initialize Firebase and setup realtime sync
+        this.firebase = new FirebaseManager();
 
-        // Expose encryption manager globally for auth.js to access
-        window.encryptionManager = this.encryption;
-
-        // Check if encryption key is available
-        const hasKey = this.encryption.getEncryptionKey();
-        console.log('[App] Encryption key available:', !!hasKey);
-
-        // Initialize Firebase
-        this.firebase = new FirebaseManager(this.encryption);
-
-        this.loadIdeas();
         this.setupEventListeners();
         this.renderIdeas();
         this.updateStats();
-        this.updateSyncStatus();
 
-        console.log('[App] Initialization complete. Ideas count:', this.ideas.length);
+        // Setup automatic realtime sync when Firebase is ready
+        this.waitForFirebaseAndSync();
+
+        console.log('[App] Initialization complete');
     }
 
-    // Local Storage Operations
-    loadIdeas() {
-        const stored = localStorage.getItem('myIdeas');
-        this.ideas = stored ? JSON.parse(stored) : [];
-        console.log('[App] Loaded ideas from localStorage:', this.ideas.length);
-    }
-
-    saveIdeas() {
-        localStorage.setItem('myIdeas', JSON.stringify(this.ideas));
-        console.log('[App] Saved ideas to localStorage:', this.ideas.length);
+    async waitForFirebaseAndSync() {
+        // Wait for Firebase to be ready
+        const checkReady = setInterval(() => {
+            if (this.firebase.isReady()) {
+                clearInterval(checkReady);
+                console.log('[App] Firebase ready, starting realtime sync');
+                this.firebase.setupRealtimeSync((ideas) => {
+                    this.ideas = ideas;
+                    this.renderIdeas();
+                    this.updateStats();
+                });
+            }
+        }, 500);
     }
 
     // Event Listeners
@@ -79,15 +71,10 @@ class IdeasManager {
                 this.addOrUpdateIdea();
             }
         });
-
-        // Sync buttons
-        document.getElementById('syncNowBtn').addEventListener('click', () => this.syncNow());
-        document.getElementById('loadFromFirebaseBtn').addEventListener('click', () => this.loadFromFirebase());
-        document.getElementById('toggleRealtimeSync').addEventListener('click', () => this.toggleRealtimeSync());
     }
 
     // Test function to add sample idea
-    addTestIdea() {
+    async addTestIdea() {
         const testIdeas = [
             'Tạo ứng dụng quản lý tài chính cá nhân',
             'Học React Native để làm app mobile',
@@ -108,14 +95,12 @@ class IdeasManager {
 
         console.log('[App] Adding test idea:', newIdea.title);
         this.ideas.unshift(newIdea);
-        this.saveIdeas();
-        this.renderIdeas();
-        this.updateStats();
+        await this.saveToFirebase();
         this.showNotification('Đã thêm ý tưởng test!', 'success');
     }
 
     // Create/Update Idea
-    addOrUpdateIdea() {
+    async addOrUpdateIdea() {
         const title = document.getElementById('ideaTitle').value.trim();
 
         if (!title) {
@@ -147,9 +132,7 @@ class IdeasManager {
             this.showNotification('Đã thêm!', 'success');
         }
 
-        this.saveIdeas();
-        this.renderIdeas();
-        this.updateStats();
+        await this.saveToFirebase();
         this.clearInputs();
         this.cancelEdit();
     }
@@ -179,7 +162,7 @@ class IdeasManager {
         this.currentEditId = null;
     }
 
-    saveEditedIdea() {
+    async saveEditedIdea() {
         const idea = this.ideas.find(i => i.id === this.currentEditId);
         if (!idea) return;
 
@@ -195,21 +178,17 @@ class IdeasManager {
         idea.tags = [];
         idea.updatedAt = new Date().toISOString();
 
-        this.saveIdeas();
-        this.renderIdeas();
-        this.updateStats();
+        await this.saveToFirebase();
         this.closeModal();
         this.showNotification('Đã lưu!', 'success');
     }
 
     // Delete Idea
-    deleteIdea() {
+    async deleteIdea() {
         if (!confirm('Bạn có chắc muốn xóa?')) return;
 
         this.ideas = this.ideas.filter(i => i.id !== this.currentEditId);
-        this.saveIdeas();
-        this.renderIdeas();
-        this.updateStats();
+        await this.saveToFirebase();
         this.closeModal();
         this.showNotification('Đã xóa!', 'success');
     }
@@ -325,137 +304,20 @@ class IdeasManager {
         }, 3000);
     }
 
-    // Firebase Sync Operations
-    async syncNow() {
+    // Save to Firebase
+    async saveToFirebase() {
         if (!this.firebase.isReady()) {
-            this.showNotification('Firebase chưa sẵn sàng. Vui lòng đợi...', 'warning');
+            console.log('[App] Firebase not ready yet, queuing save...');
             return;
         }
 
         try {
-            this.updateSyncStatus('syncing');
-            const result = await this.firebase.syncToFirebase(this.ideas);
-            this.showNotification(`Đã đồng bộ ${result.count} ý tưởng!`, 'success');
-            this.updateSyncStatus('synced');
-            localStorage.setItem('lastSyncTime', new Date().toISOString());
-            this.updateSyncStatus();
+            await this.firebase.saveIdeas(this.ideas);
+            console.log('[App] Saved to Firebase');
         } catch (error) {
-            this.showNotification('Lỗi đồng bộ: ' + error.message, 'warning');
-            this.updateSyncStatus('error');
+            console.error('[App] Error saving to Firebase:', error);
+            this.showNotification('Lỗi lưu dữ liệu: ' + error.message, 'warning');
         }
-    }
-
-    async loadFromFirebase() {
-        if (!this.firebase.isReady()) {
-            this.showNotification('Firebase chưa sẵn sàng. Vui lòng đợi...', 'warning');
-            return;
-        }
-
-        if (!confirm('Tải dữ liệu từ Firebase sẽ thay thế dữ liệu hiện tại. Bạn có chắc không?')) {
-            return;
-        }
-
-        try {
-            this.updateSyncStatus('syncing');
-            const result = await this.firebase.loadFromFirebase();
-
-            if (result.ideas.length === 0) {
-                this.showNotification('Không có dữ liệu trên Firebase', 'info');
-                this.updateSyncStatus();
-                return;
-            }
-
-            this.ideas = result.ideas;
-            this.saveIdeas();
-            this.renderIdeas();
-            this.updateStats();
-            this.showNotification(`Đã tải ${result.ideas.length} ý tưởng!`, 'success');
-            this.updateSyncStatus('synced');
-            localStorage.setItem('lastSyncTime', new Date().toISOString());
-            this.updateSyncStatus();
-        } catch (error) {
-            this.showNotification('Lỗi tải dữ liệu: ' + error.message, 'warning');
-            this.updateSyncStatus('error');
-        }
-    }
-
-    toggleRealtimeSync() {
-        if (!this.firebase.isReady()) {
-            this.showNotification('Firebase chưa sẵn sàng. Vui lòng đợi...', 'warning');
-            return;
-        }
-
-        if (this.realtimeSyncUnsubscribe) {
-            // Disable realtime sync
-            this.realtimeSyncUnsubscribe();
-            this.realtimeSyncUnsubscribe = null;
-            this.showNotification('Đã tắt đồng bộ realtime', 'info');
-            document.getElementById('toggleRealtimeSync').textContent = '🔄 Bật Sync Realtime';
-            document.getElementById('toggleRealtimeSync').classList.remove('active');
-        } else {
-            // Enable realtime sync
-            try {
-                this.realtimeSyncUnsubscribe = this.firebase.setupRealtimeSync((ideas, lastSync) => {
-                    this.ideas = ideas;
-                    this.saveIdeas();
-                    this.renderIdeas();
-                    this.updateStats();
-                    this.showNotification('Dữ liệu đã được cập nhật từ Firebase', 'info');
-                });
-
-                this.showNotification('Đã bật đồng bộ realtime', 'success');
-                document.getElementById('toggleRealtimeSync').textContent = '⏸️ Tắt Sync Realtime';
-                document.getElementById('toggleRealtimeSync').classList.add('active');
-            } catch (error) {
-                this.showNotification('Lỗi: ' + error.message, 'warning');
-            }
-        }
-    }
-
-    updateSyncStatus(status = null) {
-        const statusElement = document.getElementById('syncStatus');
-        const encryptionInfo = this.encryption.getEncryptionInfo();
-        const isReady = this.firebase.isReady();
-
-        console.log('[App] Update sync status - Firebase ready:', isReady,
-                    'Config:', this.firebase.isConfigured,
-                    'DB:', !!this.firebase.db,
-                    'UserID:', this.firebase.userId);
-
-        if (status === 'syncing') {
-            statusElement.innerHTML = '<span style="color: #f59e0b;">⏳ Đang đồng bộ...</span>';
-        } else if (status === 'synced') {
-            statusElement.innerHTML = '<span style="color: #10b981;">✓ Đã đồng bộ</span>';
-        } else if (status === 'error') {
-            statusElement.innerHTML = '<span style="color: #ef4444;">✗ Lỗi đồng bộ</span>';
-        } else {
-            const lastSync = localStorage.getItem('lastSyncTime');
-            if (isReady) {
-                if (lastSync) {
-                    const syncDate = new Date(lastSync);
-                    statusElement.innerHTML = `
-                        <span style="color: #10b981;">🔒 Mã hóa: ${encryptionInfo.algorithm}</span> |
-                        <span style="color: #6366f1;">Lần cuối: ${this.formatDate(lastSync)}</span>
-                    `;
-                } else {
-                    statusElement.innerHTML = `<span style="color: #f59e0b;">⚠️ Chưa đồng bộ | 🔒 Mã hóa: ${encryptionInfo.algorithm}</span>`;
-                }
-            } else {
-                statusElement.innerHTML = '<span style="color: #94a3b8;">⏳ Đang kết nối Firebase... | 🔒 Local: ' + encryptionInfo.algorithm + '</span>';
-            }
-        }
-
-        // Update button states
-        const syncBtns = document.querySelectorAll('.sync-btn');
-        syncBtns.forEach(btn => {
-            if (isReady) {
-                btn.disabled = false;
-                btn.style.opacity = '1';
-            } else {
-                btn.disabled = true;
-                btn.style.opacity = '0.5';
-            }
-        });
     }
 }
 

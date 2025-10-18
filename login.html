@@ -45,22 +45,14 @@
 
             <div class="login-footer">
                 <p class="security-note">
-                    🔒 Dữ liệu của bạn được mã hóa AES-256<br>
-                    Chỉ bạn mới có thể truy cập
+                    ☁️ Dữ liệu được lưu trên Firebase Cloud<br>
+                    Chia sẻ dữ liệu giữa các thiết bị
                 </p>
             </div>
         </div>
     </div>
 
-    <!-- CryptoJS for AES-256 Encryption -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-
     <script src="firebase-config.js"></script>
-    <script src="encryption.js"></script>
     <script src="auth.js"></script>
-    <script>
-        // Initialize encryption manager globally for login
-        window.encryptionManager = new EncryptionManager();
-    </script>
 </body>
 </html>

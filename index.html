@@ -10,9 +10,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-
-    <!-- CryptoJS for AES-256 Encryption -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -62,21 +59,6 @@
             <p>Hãy bắt đầu thêm ý tưởng đầu tiên của bạn!</p>
         </div>
 
-        <!-- Firebase Sync Section -->
-        <div class="sync-section">
-            <div class="sync-header">
-                <h3>🔐 Firebase Cloud Sync (Mã hóa AES-256)</h3>
-            </div>
-            <div class="sync-status" id="syncStatus">
-                <span style="color: #94a3b8;">⏳ Đang kết nối...</span>
-            </div>
-            <div class="sync-controls">
-                <button id="syncNowBtn" class="btn btn-primary sync-btn">☁️ Đồng bộ lên Cloud</button>
-                <button id="loadFromFirebaseBtn" class="btn btn-secondary sync-btn">⬇️ Tải từ Cloud</button>
-                <button id="toggleRealtimeSync" class="btn btn-secondary sync-btn">🔄 Bật Sync Realtime</button>
-            </div>
-        </div>
-
         <!-- Logout Section -->
         <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border);">
             <button class="logout-btn" onclick="logout()">🚪 Đăng xuất</button>
@@ -105,7 +87,6 @@
 
     <!-- Scripts -->
     <script src="firebase-config.js"></script>
-    <script src="encryption.js"></script>
     <script src="firebase-manager.js"></script>
     <script src="app.js"></script>
     <script src="auth.js"></script>
